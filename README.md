@@ -9,7 +9,7 @@ Personal Claude Code skills, packaged as a plugin.
 ln -s "$(pwd)/CLAUDE.global.md" ~/.claude/CLAUDE.md
 
 # In Claude Code
-/plugin marketplace add <github-user>/cedric-skills
+/plugin marketplace add cedricpri/Skills
 /plugin install cedric@cedric
 ```
 
@@ -23,15 +23,11 @@ ln -s "$(pwd)/CLAUDE.global.md" ~/.claude/CLAUDE.md
 
 | Skill | Invoked by | Purpose |
 |---|---|---|
-| `/cedric:setup-repo` | you | Detect stack, add check and audit commands, tool config |
 | `/cedric:plan` | you | Interview, then write a spec with vertical-slice tasks |
-| `/cedric:implement` | you | Implement a spec test-first, checking after each task |
-| `/cedric:review` | you | Review a diff on correctness and standards |
-| `/cedric:cleanup` | you | Verified dead-code removal and simplification |
-| `/cedric:security-audit` | you | Scans plus stack-specific manual security review |
-| `/cedric:debug` | you or Claude | Reproduce, minimize, verify, fix, regression test |
-| `/cedric:ml-review` | you or Claude | Leakage, silent data bugs, evaluation, reproducibility |
+| `/cedric:implement` | you | Implement a spec test-first, verifying after each task |
+| `/cedric:debug` | you or Claude | Root-cause debugging: errors, production-only bugs, UI, data, performance |
+| `/cedric:review` | you or Claude | In-depth review of a diff, branch, PR, folder or the whole codebase |
+| `/cedric:cleanup` | you or Claude | Verified dead-code removal, feature removal and simplification |
+| `/cedric:security-audit` | you or Claude | Scans, attack surface and manual review of code and self-hosted servers |
 
-## Subagent
-
-`cedric:implementer` runs on Sonnet and writes the code. The main conversation (Opus) plans, writes the brief, delegates, then verifies the diff and runs the checks. `plan`, `review`, `debug` and `ml-review` stay on the main model because they are reasoning work.
+Stack-specific checklists live in each skill's `references/` folder and are loaded only when needed.

@@ -1,55 +1,77 @@
 ---
 name: security-audit
-description: Audit a repo or folder for security issues - dependency and secret scans plus a stack-specific manual review - and report verified findings by severity before fixing anything.
-disable-model-invocation: true
-argument-hint: [folder, default: whole repo]
+description: Thorough security audit of a codebase, a folder, a self-hosted server setup (Docker, nginx, Cloudflare tunnel) or dependencies - automated scans, attack surface mapping, stack-specific manual review, and only verified, exploitable findings reported by severity before anything is fixed. Use when I ask for a security review, audit, vulnerability check or whether something is exposed.
+argument-hint: [folder | "server" | "deps", default: whole repo]
 ---
 
 # Security audit: $ARGUMENTS
 
-## 1. Automated scans
+Find what an attacker could actually do, prove it, and report it. Fix nothing until I pick what to fix.
 
-Run what fits the stack (install as a dev dependency or run once if missing, after asking):
-- Python: `bandit -r`, `pip-audit`
-- Laravel: `composer audit`
-- Vue: `npm audit --omit=dev`
-- All: `gitleaks detect` (secrets in code and git history)
+Read the references that match what is in scope:
+- Laravel / PHP: [references/laravel.md](references/laravel.md)
+- Vue / frontend: [references/vue.md](references/vue.md)
+- Python / AWS / data: [references/python-aws.md](references/python-aws.md)
+- Self-hosted server, Docker, nginx, Cloudflare, databases: [references/infra.md](references/infra.md)
 
-## 2. Map the attack surface
+## 1. Threat model
 
-List the entry points in scope: HTTP routes and controllers, API endpoints, CLI commands, queue jobs, file uploads, webhooks, data loaders reading external files or S3. For each, note who can reach it and what input it takes. Follow untrusted input from each entry point to where it is used.
+In a few lines: what the system does, who uses it (anonymous visitors, registered users, premium users, admins), what is valuable (accounts, personal data, payment status, the server itself), and how it is exposed (public internet, Cloudflare tunnel, internal network, AWS). This decides what matters most.
 
-## 3. Manual review checklist
+## 2. Automated scans
 
-**Laravel**
-- Mass assignment: `$guarded = []`, `$request->all()` passed to `create`/`update`/`fill`.
-- Raw SQL with input: `DB::raw`, `whereRaw`, `selectRaw`, `orderBy` with a user-chosen column.
-- Missing authorization: controllers without policies, gates or `authorize`, IDOR on route model binding (can user A load user B's record?).
-- XSS: `{!! !!}` with user data. CSRF exceptions in middleware.
-- Uploads: type and size validation, stored outside `public/`, no user-controlled path.
-- Config: `APP_DEBUG=true` in production config, `.env` committed, permissive CORS, missing rate limiting on login and password reset.
+Run what fits the stack. If a tool is missing, ask before installing it (as a dev dependency, or run it once with `npx`, `pipx run` or Docker).
+- PHP: `composer audit`
+- JavaScript: `npm audit --omit=dev` (and without `--omit=dev` for build-time risks, reported separately)
+- Python: `pip-audit`, `bandit -r <src>`
+- Secrets in files and git history: `gitleaks git` (history) and `gitleaks dir` (working tree) for gitleaks 8.19+; older versions use `gitleaks detect`. Check `gitleaks --help` first.
+- Runtime versions: PHP, Node, Python, MySQL, nginx versions against their supported and patched releases. Look up current advisories online, don't rely on memory.
 
-**Vue**
-- `v-html` with untrusted data. Tokens in `localStorage`. Secrets in `VITE_*` variables (they ship to the browser).
+For each dependency finding, check whether the vulnerable code path is actually used before rating it.
 
-**Python / ML / AWS**
-- Deserialization of untrusted files: `pickle`, `joblib.load`, `torch.load` without `weights_only`, `yaml.load` without `SafeLoader`.
-- `subprocess` with `shell=True`, `eval`/`exec`, SQL built with f-strings.
-- Hardcoded AWS keys or credentials; overly broad IAM policies or S3 bucket policies in IaC.
-- Personal and health data: member IDs, names, national numbers, medical or reimbursement data in logs, exceptions, notebook outputs, test fixtures or LLM prompts sent to external services. Data copied to places with weaker access control.
+## 3. Map the attack surface
 
-**Self-hosted / Docker** (if present): secrets in `docker-compose.yml` or committed config, containers running as root without need, services exposed on `0.0.0.0` that should be internal.
+List every entry point in scope, and for each: who can reach it, what authentication it requires, what input it takes.
+- HTTP routes (`php artisan route:list`), API endpoints, webhooks, OAuth callbacks
+- File uploads and imports (CSV, PDF, images)
+- Forms without authentication: login, registration, password reset, contact
+- Queue jobs, scheduled commands and CLI scripts that process external data
+- Lambda handlers, S3 event triggers, Streamlit pages
+- Exposed services and ports (see infra reference)
 
-## 4. Verify
+## 4. Manual review
 
-For each candidate, trace the actual data flow and confirm it is reachable and exploitable. Drop anything you can't confirm, or list it separately as "needs a human look" with the reason.
+Follow untrusted input from each entry point to every place it is used (query, shell, file path, HTML, redirect, deserialization, outgoing request, LLM prompt). Then go through the reference checklists for the stack. Pay particular attention to:
+- **Authorization**: for every endpoint that takes an id, can user A read or change user B's record? Are premium or admin features enforced in the backend?
+- **Authentication flows**: password reset, email verification, social login, session lifetime, remember-me, logout.
+- **Personal data**: what is collected, where it is stored, logged, exported, sent to third parties, and who can see it.
+- **Secrets**: in code, config, git history, Docker files, frontend bundles, CI logs.
 
-## 5. Report
+## 5. Verify
+
+- For each candidate, trace the full flow and confirm it is reachable by the attacker in the threat model and exploitable with real inputs.
+- Where it is safe, prove it locally: a feature test or request that shows the hole (for example, user A fetching user B's record). Never test against production without my explicit approval.
+- Things you can't verify from here (server config you can't see, cloud settings) go under "Needs checking" with the exact command or setting for me to look at.
+- Drop anything that is theoretical with no realistic path.
+
+## 6. Report
+
+Start with a summary: the number of findings per severity and the one thing to fix first.
 
 For each verified finding:
-- Severity (Critical / High / Medium / Low) and confidence
-- `file:line` and the vulnerable flow from entry point to sink
-- A concrete exploit scenario in one or two sentences
-- The fix
+- **Severity** (Critical / High / Medium / Low), based on impact and how easy it is to exploit in this threat model
+- `file:line` (or config file and setting), and the flow from entry point to sink
+- **Exploit scenario**: who does what, and what they get, in one or two sentences
+- **Fix**: concrete, minimal, in the style of the codebase
+- **Proof**: how it was verified
 
-Add dependency findings with the fixed version. Don't fix anything until the user picks what to fix. Then delegate each finding to the `cedric:implementer` subagent with a brief containing the flow, the fix, and a test that proves the hole is closed where practical. Review each diff and run the check command yourself before moving to the next.
+Then: dependency findings with the fixed version and whether the vulnerable code is used, the "Needs checking" list, and what was checked and found fine (one line).
+
+## 7. Fix (only after I choose)
+
+For each finding I pick, in order of severity:
+1. Write a test that demonstrates the hole (fails before the fix) where practical.
+2. Apply the minimal fix.
+3. Run the test and the full verification from the global instructions.
+4. Check that the fix doesn't break the legitimate use (authorized users still have access).
+Server and config changes: give me the exact change and the command to apply and check it, unless the files are in the repo.

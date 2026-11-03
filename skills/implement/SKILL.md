@@ -1,44 +1,45 @@
 ---
 name: implement
-description: Implement a spec from docs/specs/ task by task, test-first at the agreed seams, running the repo check command after each task.
+description: Implement a spec from docs/specs/ (or a described change) task by task, test-first, verifying after each task and reviewing the full diff at the end.
 disable-model-invocation: true
 argument-hint: [spec path or task description]
 ---
 
 # Implement: $ARGUMENTS
 
+Working, verified code that fits the codebase. Nothing is "done" until it has been run.
+
 ## Before writing code
 
-1. Read the spec (or the task description), the repo `CLAUDE.md`, and the code each task touches.
-2. If no spec exists and the change is more than a small fix, suggest `/cedric:plan` first.
-3. List the test seams you will use (one line each: what it catches, what it misses) and **wait for the user to confirm them**. No test at an unconfirmed seam.
-4. If the code you will change has no tests, add characterization tests at those seams first, capturing current behaviour.
+1. Read the spec (or the task description), the repo `CLAUDE.md`, and all the code each task touches, plus the closest existing feature that does something similar. Follow its patterns.
+2. If there is no spec and the change is more than a small fix, suggest `/cedric:plan` first.
+3. Run the verification from the global instructions to get a baseline. If it is already red, tell me before starting, so new failures can be told apart from old ones.
+4. List the tests you will write (one line each: the seam, the cases) and wait for me to confirm.
+5. If the code you will change has no tests, add characterization tests at those seams first, capturing the current behaviour.
+6. When a library or API is involved, check its docs for the installed version before using it.
 
 ## For each task, in order
 
-You orchestrate; the `cedric:implementer` subagent (Sonnet) writes the code.
+1. Write the first failing test for the task. Run it and see it fail for the right reason.
+2. Write the minimum code to make it pass, following the coding standards. Run it.
+3. Repeat for the remaining cases of the task (edge cases, errors, permissions).
+4. Complete the slice: migration, model casts and fillable, validation, authorization, UI states (loading, empty, error), translations in every locale, as the task needs.
+5. Run the verification from the global instructions. For UI work, open the page in a browser at mobile and desktop widths and check it.
+6. Re-read your diff for the task: debug code left behind, unused imports, duplication, anything beyond the task.
+7. Tick the task in the spec.
 
-1. Write a self-contained brief: the task goal, the decisions from the spec that apply to it, the files to touch, the confirmed test seams, what is out of scope, and the check command. The subagent sees nothing of this conversation, so include everything it needs.
-2. Delegate it to `cedric:implementer`. Run tasks one after another; run two in parallel only when they touch different files and don't depend on each other.
-3. When it returns, verify: read the diff, check it against the brief and the test rules below, and run the check command yourself.
-4. If something is wrong or missing, send a corrective brief to the same subagent rather than fixing it yourself, unless it's a one-line fix.
-5. If the subagent reports an open question, answer it from the spec, or ask the user.
-6. Tick the task in the spec.
-
-For a task of a few lines, do it directly instead of delegating.
+If a task turns out to need a decision the spec doesn't cover, stop and ask instead of choosing silently.
 
 ## Test rules
 
-- Test behaviour through public interfaces, never private methods or internals.
-- Mock only what crosses a system boundary (HTTP, AWS, mail, clock). Prefer real objects and an in-memory or test database.
-- Expected values come from a known-good literal or the spec, never recomputed the way the code computes them.
+- Test behaviour through public interfaces (endpoints, commands, public functions, components), never private methods or internals.
+- Mock only what crosses a system boundary (HTTP, AWS, mail, the clock). Use real objects and a test database.
+- Expected values come from a literal or the spec, never recomputed the way the code computes them.
+- Cover the unhappy paths: invalid input, unauthorized user, missing related data, empty lists.
 - Test names describe behaviour in the project's vocabulary: `test_export_includes_only_filtered_trips`.
-
-## Code rules
-
-Follow the global and repo `CLAUDE.md` standards. If a library's behaviour is uncertain, look it up before using it.
 
 ## When done
 
 1. Run `/cedric:review` on the full diff and fix what it finds.
-2. Report: tasks completed, tests added, check result, and anything deliberately left out. Propose a commit message; don't commit unless asked.
+2. Run the full verification one last time.
+3. Report: tasks completed, tests added, verification results (and what couldn't run here, with the command for me), migrations to run, anything deliberately left out. Propose a commit message; don't commit unless asked.
