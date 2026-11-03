@@ -1,0 +1,14 @@
+{
+  "name": "cedric",
+  "owner": {
+    "name": "Cedric"
+  },
+  "description": "Cedric's personal Claude Code skills.",
+  "plugins": [
+    {
+      "name": "cedric",
+      "source": "./",
+      "description": "Planning, implementation, review, cleanup, security and debugging skills for Python, Laravel and Vue projects."
+    }
+  ]
+}
